@@ -17,7 +17,8 @@ const app = express();
 
 // --- Middleware Setup ---
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  // === CRUCIAL FIX: Added your Vercel frontend URL to allowed origins ===
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'https://slugmaa.vercel.app'], 
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -49,6 +50,7 @@ const upload = multer({ storage: storage });
 // --- MongoDB Connection ---
 async function connectDbAndStartServer() {
   try {
+    // Ensure MONGO_URI is set in your Vercel project environment variables for the backend
     await mongoose.connect(process.env.MONGO_URI);
     console.log('✅ MongoDB connected successfully to dhruvDB');
 
@@ -514,7 +516,7 @@ async function connectDbAndStartServer() {
         const user = await User.findByIdAndDelete(id);
 
         if (!user) {
-          return res.status(404).json({ message: 'User not found' });
+          return res.status(404).json({ message: 'User not to found' });
         }
         res.status(200).json({ message: '✅ User deleted successfully!' });
       } catch (err) {
