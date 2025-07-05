@@ -46,11 +46,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Add the root route as requested by the user
-app.get('/', (req, res) => {
-  res.send('Slugma Backend is running 🚀');
-});
-
 // --- MongoDB Connection ---
 async function connectDbAndStartServer() {
   try {
@@ -843,7 +838,7 @@ async function connectDbAndStartServer() {
 
 
     // --- Server Start ---
-    const PORT = 3001;  
+    const PORT = 3001;
     const HOST = '0.0.0.0';
 
     app.listen(PORT, HOST, () => {
