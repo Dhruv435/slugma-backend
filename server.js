@@ -828,31 +828,21 @@ async function connectDbAndStartServer() {
     });
 
     // --- Admin Specific API Routes ---
-    app.post('/api/admin/login', async (req, res) => {
-        const { username, password } = req.body;
+app.post('/api/admin/login', async (req, res) => {
+  const { username, password } = req.body;
 
-        // --- IMPORTANT: For production, hash passwords and store them securely! ---
-        // For this demo, we're using hardcoded values as requested.
-        const ADMIN_USERNAME = 'slugma';
-        const ADMIN_PASSWORD = 'firepokemon'; // In real app: this would be a hashed password
+  const ADMIN_USERNAME = 'slugma';
+  const ADMIN_PASSWORD = 'firepokemon';
 
-        if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-            // In a real app, you'd generate a JWT or set a session here
-            res.status(200).json({ message: '✅ Admin login successful!', token: 'admin-auth-token-example' });
-        } else {
-            res.status(401).json({ message: '❌ Invalid admin credentials' });
-        }
-    });
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    res.status(200).json({ message: '✅ Admin login successful!', token: 'admin-auth-token-example' });
+  } else {
+    res.status(401).json({ message: '❌ Invalid admin credentials' });
+  }
+});
 
 
     // --- Server Start ---
-    const PORT = 3001;
-    const HOST = '0.0.0.0';
-
-    app.listen(PORT, HOST, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT} (accessible from frontend via http://localhost:${PORT})`);
-      console.log(`Actual listening address: http://${HOST}:${PORT}`);
-    });
 
   } catch (err) {
     console.error('❌ Failed to connect to MongoDB or start server:', err);
@@ -861,3 +851,5 @@ async function connectDbAndStartServer() {
 }
 
 connectDbAndStartServer();
+
+module.exports = app;
