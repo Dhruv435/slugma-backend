@@ -85,6 +85,12 @@ async function connectDbAndStartServer() {
       return [];
     };
 
+    // --- Add this new route for the root URL ---
+    app.get('/', (req, res) => {
+        res.status(200).send('Welcome to the Dhruv E-commerce Backend API!');
+    });
+    // --- End of new root route ---
+
 
     // --- API Routes for Products ---
 
