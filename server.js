@@ -1,3 +1,5 @@
+// File: backend/server.js
+
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
@@ -7,10 +9,13 @@ const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
+// Load environment variables from .env file
 dotenv.config();
 
+// Initialize Express application
 const app = express();
 
+// --- Middleware Setup ---
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -18,14 +23,15 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json()); // For parsing application/json
+app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
 
 app.use('/uploads', express.static('uploads'));
 
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
+  console.log('📦 Created "uploads" directory.');
 }
 
 const storage = multer.diskStorage({
@@ -40,19 +46,23 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
+// Add the root route as requested by the user
 app.get('/', (req, res) => {
-  res.status(200).json({ message: 'Welcome to the Slugma API! Access specific endpoints like /api/products or /api/users.' });
+  res.send('Slugma Backend is running 🚀');
 });
 
+// --- MongoDB Connection ---
 async function connectDbAndStartServer() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
+    console.log('✅ MongoDB connected successfully to dhruvDB');
 
     const Product = require('./models/Product');
     const User = require('./models/User');
     const Order = require('./models/Order');
     const Review = require('./models/Review');
 
+    // --- Helper function for robust number parsing ---
     const parseNumberOrDefault = (value, defaultVal = 0) => {
         const parsed = parseFloat(value);
         return isNaN(parsed) ? defaultVal : parsed;
@@ -61,11 +71,15 @@ async function connectDbAndStartServer() {
         const parsed = parseInt(value);
         return isNaN(parsed) ? defaultVal : parsed;
     };
+    // Helper for 'moreDescription' which comes as a single string with newlines
     const parseMoreDescription = (text) => {
         if (!text || typeof text !== 'string') return [];
         return text.split('\n').map(line => line.trim()).filter(line => line !== '');
     };
 
+    // --- NEW: Universal array parsing for Multer req.body fields ---
+    // Multer sometimes makes FormData arrays appear as direct array properties in req.body.
+    // Or if only one item is selected, it might come as a string.
     const ensureArray = (value) => {
       if (Array.isArray(value)) {
         return value.map(item => String(item).trim()).filter(item => item !== '');
@@ -76,8 +90,16 @@ async function connectDbAndStartServer() {
       return [];
     };
 
+
+    // --- API Routes for Products ---
+
+    // POST /api/products: Add a new product
     app.post('/api/products', upload.single('image'), async (req, res) => {
       try {
+        console.log('--- SERVER: POST /api/products Request Received ---');
+        console.log('SERVER: Raw req.body (before custom parsing):', req.body);
+        console.log('SERVER: Raw req.file:', req.file);
+
         const {
           name, description, moreDescription, price, salePrice, category,
           stock, sku, brand, material, weight, length, width, height
@@ -93,11 +115,22 @@ async function connectDbAndStartServer() {
         const parsedWidth = parseNumberOrDefault(width);
         const parsedHeight = parseNumberOrDefault(height);
 
-        const colors = ensureArray(req.body.colors);
-        const size = ensureArray(req.body.size);
+        // --- Crucial change here: Directly access req.body.colors/size and ensure they are arrays ---
+        const colors = ensureArray(req.body.colors); // Multer should make this an array if multiple `colors[]` were sent
+        const size = ensureArray(req.body.size);     // Multer should make this an array if multiple `size[]` were sent
         const productTags = ensureArray(req.body.tags);
         const parsedMoreDescription = parseMoreDescription(moreDescription);
 
+        console.log('SERVER: Parsed Data - Name:', name, 'Description:', description);
+        console.log('SERVER: Parsed Data - Price:', parsedPrice, 'SalePrice:', parsedSalePrice, 'Stock:', parsedStock);
+        console.log('SERVER: Parsed Data - Colors:', colors, 'Type:', typeof colors, 'Is Array:', Array.isArray(colors));
+        console.log('SERVER: Parsed Data - Size:', size, 'Type:', typeof size, 'Is Array:', Array.isArray(size));
+        console.log('SERVER: Parsed Data - More Description:', parsedMoreDescription);
+        console.log('SERVER: Parsed Data - Tags:', productTags);
+        console.log('----------------------------------------------------');
+
+
+        // Server-side validation
         if (parsedSalePrice !== null && parsedSalePrice >= parsedPrice) {
           return res.status(400).json({ message: 'Sale price must be less than the regular price.' });
         }
@@ -122,6 +155,7 @@ async function connectDbAndStartServer() {
         if (!category || !category.trim()) {
             return res.status(400).json({ message: 'Category is required.' });
         }
+        // End server-side validation
 
         const newProduct = new Product({
           name,
@@ -130,8 +164,8 @@ async function connectDbAndStartServer() {
           price: parsedPrice,
           salePrice: parsedSalePrice,
           category,
-          size,
-          colors,
+          size, // Use the directly parsed 'size' array
+          colors, // Use the directly parsed 'colors' array
           image: imagePath,
           stock: parsedStock,
           sku: sku || undefined,
@@ -150,6 +184,7 @@ async function connectDbAndStartServer() {
         res.status(201).json({ message: '✅ Product added successfully!', product: newProduct });
 
       } catch (err) {
+        console.error('❌ Server: Error adding product:', err);
         if (err.name === 'ValidationError') {
           const messages = Object.values(err.errors).map(val => val.message);
           return res.status(400).json({ message: 'Validation Error: ' + messages.join(', ') });
@@ -158,6 +193,7 @@ async function connectDbAndStartServer() {
       }
     });
 
+    // GET /api/products: Fetch all products with ratings
     app.get('/api/products', async (req, res) => {
       try {
         const products = await Product.find({});
@@ -188,10 +224,12 @@ async function connectDbAndStartServer() {
 
         res.status(200).json(productsWithRatings);
       } catch (err) {
+        console.error('❌ Error fetching products:', err);
         res.status(500).json({ message: '❌ Failed to fetch products', error: err.message });
       }
     });
 
+    // GET /api/products/:id: Fetch a single product by ID with all reviews
     app.get('/api/products/:id', async (req, res) => {
         try {
             const { id } = req.params;
@@ -225,6 +263,7 @@ async function connectDbAndStartServer() {
 
             res.status(200).json(productWithReviews);
         } catch (err) {
+            console.error('❌ Error fetching single product:', err);
             if (err.name === 'CastError') {
                 return res.status(400).json({ message: 'Invalid product ID format' });
             }
@@ -232,8 +271,13 @@ async function connectDbAndStartServer() {
         }
     });
 
+    // PUT /api/products/:id: Update a product by ID
     app.put('/api/products/:id', upload.single('image'), async (req, res) => {
       try {
+        console.log('--- SERVER: PUT /api/products/:id Request Received ---');
+        console.log('SERVER: Raw req.body (before custom parsing):', req.body);
+        console.log('SERVER: Raw req.file:', req.file);
+
         const { id } = req.params;
         const {
           name, description, moreDescription, price, salePrice, category,
@@ -253,11 +297,21 @@ async function connectDbAndStartServer() {
         const parsedWidth = parseNumberOrDefault(width);
         const parsedHeight = parseNumberOrDefault(height);
 
+        // --- Crucial change here: Directly access req.body.colors/size and ensure they are arrays ---
         const colors = ensureArray(req.body.colors);
         const size = ensureArray(req.body.size);
         const productTags = ensureArray(req.body.tags);
         const parsedMoreDescription = parseMoreDescription(moreDescription);
 
+        console.log('SERVER: Parsed Data (Update) - Name:', name, 'Description:', description);
+        console.log('SERVER: Parsed Data (Update) - Price:', parsedPrice, 'SalePrice:', parsedSalePrice, 'Stock:', parsedStock);
+        console.log('SERVER: Parsed Data (Update) - Colors:', colors, 'Type:', typeof colors, 'Is Array:', Array.isArray(colors));
+        console.log('SERVER: Parsed Data (Update) - Size:', size, 'Type:', typeof size, 'Is Array:', Array.isArray(size));
+        console.log('SERVER: Parsed Data (Update) - More Description:', parsedMoreDescription);
+        console.log('SERVER: Parsed Data (Update) - Tags:', productTags);
+        console.log('----------------------------------------------------');
+
+        // Server-side validation
         if (parsedSalePrice !== null && parsedSalePrice >= parsedPrice) {
           return res.status(400).json({ message: 'Sale price must be less than the regular price.' });
         }
@@ -282,12 +336,14 @@ async function connectDbAndStartServer() {
         if (!category || !category.trim()) {
             return res.status(400).json({ message: 'Category is required.' });
         }
+        // End server-side validation
 
         if (req.file) {
           if (product.image) {
             const oldImagePath = path.join(__dirname, product.image);
             if (fs.existsSync(oldImagePath)) {
               fs.unlinkSync(oldImagePath);
+              console.log(`🗑️ Old image deleted: ${oldImagePath}`);
             }
           }
           product.image = `/uploads/${req.file.filename}`;
@@ -299,8 +355,8 @@ async function connectDbAndStartServer() {
         product.price = parsedPrice;
         product.salePrice = parsedSalePrice;
         product.category = category;
-        product.size = size;
-        product.colors = colors;
+        product.size = size; // Use the directly parsed 'size' array
+        product.colors = colors; // Use the directly parsed 'colors' array
         product.stock = parsedStock;
         product.sku = sku || undefined;
         product.brand = brand || '';
@@ -317,6 +373,7 @@ async function connectDbAndStartServer() {
         res.status(200).json({ message: '✅ Product updated successfully!', product });
 
       } catch (err) {
+        console.error('❌ Server: Error updating product:', err);
         if (err.name === 'ValidationError') {
           const messages = Object.values(err.errors).map(val => val.message);
           return res.status(400).json({ message: 'Validation Error: ' + messages.join(', ') });
@@ -328,6 +385,8 @@ async function connectDbAndStartServer() {
       }
     });
 
+
+    // DELETE /api/products/:id: Delete a product by ID
     app.delete('/api/products/:id', async (req, res) => {
       try {
         const { id } = req.params;
@@ -341,14 +400,17 @@ async function connectDbAndStartServer() {
           const imagePathToDelete = path.join(__dirname, product.image);
           if (fs.existsSync(imagePathToDelete)) {
             fs.unlinkSync(imagePathToDelete);
+            console.log(`🗑️ Image deleted: ${imagePathToDelete}`);
           }
         }
 
         await Review.deleteMany({ productId: id });
+        console.log(`🗑️ Reviews deleted for product ${id}`);
 
         res.status(200).json({ message: '✅ Product deleted successfully!' });
 
       } catch (err) {
+        console.error('❌ Error deleting product:', err);
         if (err.name === 'CastError') {
             return res.status(400).json({ message: 'Invalid product ID format' });
         }
@@ -356,6 +418,7 @@ async function connectDbAndStartServer() {
       }
     });
 
+    // --- API Routes for Users ---
     app.post('/api/signup', async (req, res) => {
       try {
         const { username, password, age, mobileNumber } = req.body;
@@ -382,6 +445,7 @@ async function connectDbAndStartServer() {
         res.status(201).json({ message: '✅ User registered successfully!', user: userResponse });
 
       } catch (err) {
+        console.error('❌ Error during user signup:', err);
         if (err.name === 'ValidationError') {
           const messages = Object.values(err.errors).map(val => val.message);
           return res.status(400).json({ message: 'Validation Error', errors: messages });
@@ -408,6 +472,7 @@ async function connectDbAndStartServer() {
           res.status(401).json({ message: 'Invalid username or password' });
         }
       } catch (err) {
+        console.error('❌ Error during user login:', err);
         res.status(500).json({ message: '❌ Failed to login. Please try again later.', error: err.message });
       }
     });
@@ -417,6 +482,7 @@ async function connectDbAndStartServer() {
         const users = await User.find({}).select('-password');
         res.status(200).json(users);
       } catch (err) {
+        console.error('❌ Error fetching users:', err);
         res.status(500).json({ message: '❌ Failed to fetch users', error: err.message });
       }
     });
@@ -433,6 +499,7 @@ async function connectDbAndStartServer() {
             }
             res.status(200).json(user);
         } catch (err) {
+            console.error('❌ Error fetching single user:', err);
             if (err.name === 'CastError') {
                 return res.status(400).json({ message: 'Invalid user ID format' });
             }
@@ -450,6 +517,7 @@ async function connectDbAndStartServer() {
         }
         res.status(200).json({ message: '✅ User deleted successfully!' });
       } catch (err) {
+        console.error('❌ Error deleting user:', err);
         if (err.name === 'CastError') {
             return res.status(400).json({ message: 'Invalid user ID format' });
         }
@@ -457,6 +525,7 @@ async function connectDbAndStartServer() {
       }
     });
 
+    // --- API Routes for Orders ---
     app.post('/api/orders', async (req, res) => {
       try {
         const { userId, products, shippingAddress, paymentMethod, totalPrice } = req.body;
@@ -497,6 +566,7 @@ async function connectDbAndStartServer() {
         res.status(201).json({ message: '✅ Order placed successfully!', order: newOrder });
 
       } catch (err) {
+        console.error('❌ Error placing order:', err);
         if (err.name === 'ValidationError') {
           const messages = Object.values(err.errors).map(val => val.message);
           return res.status(400).json({ message: 'Validation Error', errors: messages });
@@ -519,6 +589,7 @@ async function connectDbAndStartServer() {
         const orders = await Order.find(query).populate('userId', 'username mobileNumber').sort({ createdAt: -1 });
         res.status(200).json(orders);
       } catch (err) {
+        console.error('❌ Error fetching all orders:', err);
         res.status(500).json({ message: '❌ Failed to fetch orders', error: err.message });
       }
     });
@@ -542,6 +613,7 @@ async function connectDbAndStartServer() {
         const orders = await Order.find(query).sort({ createdAt: -1 });
         res.status(200).json(orders);
       } catch (err) {
+        console.error('❌ Error fetching user orders:', err);
         if (err.name === 'CastError') {
             return res.status(400).json({ message: 'Invalid User ID format' });
         }
@@ -562,6 +634,7 @@ async function connectDbAndStartServer() {
 
         res.status(200).json(order);
       } catch (err) {
+        console.error('❌ Error fetching single order:', err);
         if (err.name === 'CastError') {
             return res.status(400).json({ message: 'Invalid Order ID format' });
         }
@@ -594,6 +667,7 @@ async function connectDbAndStartServer() {
             await order.save();
             res.status(200).json({ message: '✅ Order updated successfully!', order });
         } catch (err) {
+            console.error('❌ Error updating order:', err);
             if (err.name === 'CastError') {
                 return res.status(400).json({ message: 'Invalid Order ID format.' });
             }
@@ -627,6 +701,7 @@ async function connectDbAndStartServer() {
             res.status(200).json({ message: '✅ Order marked as received successfully!', order });
 
         } catch (err) {
+            console.error('❌ Error confirming order receipt:', err);
             if (err.name === 'CastError') {
                 return res.status(400).json({ message: 'Invalid Order ID format.' });
             }
@@ -665,6 +740,7 @@ async function connectDbAndStartServer() {
             res.status(200).json({ message: '✅ Order cancelled successfully!', order });
 
         } catch (err) {
+            console.error('❌ Error cancelling order:', err);
             if (err.name === 'CastError') {
                 return res.status(400).json({ message: 'Invalid Order ID format' });
             }
@@ -672,6 +748,7 @@ async function connectDbAndStartServer() {
       }
     });
 
+    // --- API Routes for Reviews ---
     app.post('/api/reviews', async (req, res) => {
       try {
         const { productId, userId, rating, comment } = req.body;
@@ -709,6 +786,7 @@ async function connectDbAndStartServer() {
         res.status(201).json({ message: '✅ Review submitted successfully!', review: newReview });
 
       } catch (err) {
+        console.error('❌ Error submitting review:', err);
         if (err.name === 'ValidationError') {
           const messages = Object.values(err.errors).map(val => val.message);
           return res.status(400).json({ message: 'Validation Error', errors: messages });
@@ -738,6 +816,7 @@ async function connectDbAndStartServer() {
 
         res.status(200).json(formattedReviews);
       } catch (err) {
+        console.error('❌ Error fetching reviews:', err);
         if (err.name === 'CastError') {
             return res.status(400).json({ message: 'Invalid product ID format' });
         }
@@ -745,26 +824,35 @@ async function connectDbAndStartServer() {
       }
     });
 
+    // --- Admin Specific API Routes ---
     app.post('/api/admin/login', async (req, res) => {
         const { username, password } = req.body;
 
+        // --- IMPORTANT: For production, hash passwords and store them securely! ---
+        // For this demo, we're using hardcoded values as requested.
         const ADMIN_USERNAME = 'slugma';
-        const ADMIN_PASSWORD = 'firepokemon';
+        const ADMIN_PASSWORD = 'firepokemon'; // In real app: this would be a hashed password
 
         if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+            // In a real app, you'd generate a JWT or set a session here
             res.status(200).json({ message: '✅ Admin login successful!', token: 'admin-auth-token-example' });
         } else {
             res.status(401).json({ message: '❌ Invalid admin credentials' });
         }
     });
 
-    const PORT = 3001;
+
+    // --- Server Start ---
+    const PORT = 3001;  
     const HOST = '0.0.0.0';
 
     app.listen(PORT, HOST, () => {
+      console.log(`🚀 Server running on http://localhost:${PORT} (accessible from frontend via http://localhost:${PORT})`);
+      console.log(`Actual listening address: http://${HOST}:${PORT}`);
     });
 
   } catch (err) {
+    console.error('❌ Failed to connect to MongoDB or start server:', err);
     process.exit(1);
   }
 }
