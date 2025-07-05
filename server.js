@@ -18,7 +18,7 @@ const app = express();
 // --- Middleware Setup ---
 app.use(cors({
   // === CRUCIAL FIX: Added your Vercel frontend URL to allowed origins ===
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'https://slugma.vercel.app'], 
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'https://slugma-gold.vercel.app'], 
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
