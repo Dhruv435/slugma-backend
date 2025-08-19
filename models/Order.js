@@ -65,19 +65,19 @@ const orderSchema = new mongoose.Schema({
     type: String,
     default: 'Pending', // Initial status when order is placed
     enum: [
-      'Pending',        // Order placed, waiting for confirmation
-      'Confirmed',      // Admin confirmed the order
-      'Processing',     // Order is being prepared
-      'Shipped',        // Order has left the warehouse
-      'Delivered',      // Order marked as delivered by admin (less strict than confirmed by user)
-      'Cancelled',      // Order cancelled by user or admin
-      'Delivered & Confirmed' // Order confirmed as received by the user (moves to history)
+      'Pending',         
+      'Confirmed',      
+      'Processing',      
+      'Shipped',         
+      'Delivered',       
+      'Cancelled',       
+      'Delivered & Confirmed'  
     ],
   },
   // Delivery timeline option selected/set for tracking
   deliveryOption: {
     type: String,
-    default: 'Option 1 - 5 days to delivery', // Default option for new orders
+    default: 'Option 1 - 5 days to delivery',  
     enum: [
       'Option 1 - 5 days to delivery', // Initial stage
       'Option 2 - 3 days to delivery', // Moving closer
