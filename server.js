@@ -17,8 +17,7 @@ const app = express();
 
 // --- Middleware Setup ---
 app.use(cors({
-  // === CRUCIAL FIX: Added your Vercel frontend URL to allowed origins ===
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'https://slugma-gold.vercel.app'], 
+  origin: ['http://localhost:5173', 'http://localhost:5174'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -50,7 +49,6 @@ const upload = multer({ storage: storage });
 // --- MongoDB Connection ---
 async function connectDbAndStartServer() {
   try {
-    // Ensure MONGO_URI is set in your Vercel project environment variables for the backend
     await mongoose.connect(process.env.MONGO_URI);
     console.log('✅ MongoDB connected successfully to dhruvDB');
 
@@ -86,12 +84,6 @@ async function connectDbAndStartServer() {
       }
       return [];
     };
-
-    // --- Add this new route for the root URL ---
-    app.get('/', (req, res) => {
-        res.status(200).send('Welcome to the Dhruv E-commerce Backend API!');
-    });
-    // --- End of new root route ---
 
 
     // --- API Routes for Products ---
@@ -516,7 +508,7 @@ async function connectDbAndStartServer() {
         const user = await User.findByIdAndDelete(id);
 
         if (!user) {
-          return res.status(404).json({ message: 'User not to found' });
+          return res.status(404).json({ message: 'User not found' });
         }
         res.status(200).json({ message: '✅ User deleted successfully!' });
       } catch (err) {
